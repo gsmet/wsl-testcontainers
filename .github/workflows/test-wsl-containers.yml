@@ -82,5 +82,25 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - name: Verify Docker is still reachable
+        shell: pwsh
+        run: |
+          Write-Host "DOCKER_HOST=$env:DOCKER_HOST"
+          Write-Host "TESTCONTAINERS_HOST_OVERRIDE=$env:TESTCONTAINERS_HOST_OVERRIDE"
+          Write-Host "WSL status:"
+          wsl --list --verbose
+          Write-Host "Docker service status inside WSL:"
+          wsl -d Ubuntu --user root -- systemctl status docker --no-pager
+          Write-Host "Docker info inside WSL:"
+          wsl -d Ubuntu --user root -- docker info
+          Write-Host "Netstat for port 2375 inside WSL:"
+          wsl -d Ubuntu --user root -- bash -c "ss -tlnp | grep 2375"
+          Write-Host "Testing TCP from Windows side..."
+          $tcp = New-Object System.Net.Sockets.TcpClient
+          $dockerHost = ($env:DOCKER_HOST -replace 'tcp://', '' -replace ':2375', '')
+          $tcp.Connect($dockerHost, 2375)
+          $tcp.Close()
+          Write-Host "TCP connection to $dockerHost:2375 succeeded"
+
       - name: Run Testcontainers test
         run: mvn verify -e
