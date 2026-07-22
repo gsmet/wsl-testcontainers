@@ -1,0 +1,86 @@
+name: Test WSL2 Containers
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-wsl-containers:
+    name: WSL2 + Testcontainers on Windows
+    runs-on: windows-2025
+    steps:
+      - name: Set up Linux containers on Windows via WSL2
+        shell: pwsh
+        run: |
+          Write-Host "Installing WSL with Ubuntu (no-launch to avoid interactive setup)..."
+          wsl --set-default-version 2
+          wsl --install -d Ubuntu --no-launch
+          Write-Host "Enabling systemd (required for Docker)..."
+          wsl -d Ubuntu --user root bash -c "printf '[boot]\nsystemd=true\n' > /etc/wsl.conf"
+          wsl --shutdown
+          Start-Sleep -Seconds 5
+          Write-Host "Waiting for systemd to be ready..."
+          $retries = 0
+          while ($retries -lt 30) {
+            $result = wsl -d Ubuntu --user root -- bash -c "systemctl is-system-running 2>/dev/null" 2>$null
+            if ($result -eq "running" -or $result -eq "degraded") {
+              Write-Host "systemd is ready (status: $result)"
+              break
+            }
+            $retries++
+            Write-Host "  systemd not ready yet (status: $result), waiting... ($retries/30)"
+            Start-Sleep -Seconds 2
+          }
+          if ($retries -eq 30) {
+            Write-Host "::warning::systemd did not reach running state, proceeding anyway"
+          }
+          Write-Host "Installing Docker CE in WSL..."
+          wsl -d Ubuntu --user root -- bash -c "export DEBIAN_FRONTEND=noninteractive && apt-get update -qq > /dev/null && apt-get install -y -qq ca-certificates curl > /dev/null"
+          wsl -d Ubuntu --user root -- bash -c "install -m 0755 -d /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc && chmod a+r /etc/apt/keyrings/docker.asc"
+          wsl -d Ubuntu --user root -- bash -c 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo ${UBUNTU_CODENAME:-$VERSION_CODENAME}) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null'
+          wsl -d Ubuntu --user root -- bash -c "export DEBIAN_FRONTEND=noninteractive && apt-get update -qq > /dev/null && apt-get install -y -qq docker-ce docker-ce-cli containerd.io > /dev/null"
+          Write-Host "Configuring Docker to listen on TCP for Windows-side access..."
+          wsl -d Ubuntu --user root -- bash -c 'mkdir -p /etc/systemd/system/docker.service.d && printf "[Service]\nExecStart=\nExecStart=/usr/bin/dockerd -H unix:///var/run/docker.sock -H tcp://0.0.0.0:2375\n" > /etc/systemd/system/docker.service.d/override.conf'
+          wsl -d Ubuntu --user root -- bash -c "systemctl daemon-reload && systemctl restart docker"
+          Write-Host "Waiting for Docker daemon to be ready inside WSL..."
+          wsl -d Ubuntu --user root -- bash -c 'for i in $(seq 1 30); do docker info >/dev/null 2>&1 && break; echo "  Docker not ready yet, waiting... ($i/30)"; sleep 2; done'
+          wsl -d Ubuntu --user root -- docker run --rm hello-world
+          Write-Host "Determining WSL2 IP address..."
+          $wslIp = (wsl -d Ubuntu --user root -- hostname -I).Trim().Split(" ")[0]
+          Write-Host "WSL2 IP: $wslIp"
+          Write-Host "Testing TCP connectivity from Windows side..."
+          $connected = $false
+          foreach ($candidate in @("localhost", $wslIp)) {
+            try {
+              $tcp = New-Object System.Net.Sockets.TcpClient
+              $tcp.Connect($candidate, 2375)
+              $tcp.Close()
+              Write-Host "  Successfully connected to Docker at ${candidate}:2375"
+              $dockerHost = $candidate
+              $connected = $true
+              break
+            } catch {
+              Write-Host "  Could not connect to ${candidate}:2375 - $_"
+            }
+          }
+          if (-not $connected) {
+            Write-Host "::error::Cannot connect to Docker daemon from Windows side"
+            exit 1
+          }
+          echo "DOCKER_HOST=tcp://${dockerHost}:2375" >> $env:GITHUB_ENV
+          echo "TESTCONTAINERS_HOST_OVERRIDE=${dockerHost}" >> $env:GITHUB_ENV
+          Write-Host "Linux container support is ready (DOCKER_HOST=tcp://${dockerHost}:2375)"
+
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Run Testcontainers test
+        run: mvn verify -e
