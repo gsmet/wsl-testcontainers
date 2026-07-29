@@ -60,24 +60,13 @@ jobs:
           Write-Host "Determining WSL2 IP address..."
           $wslIp = (wsl -d Ubuntu --user root -- hostname -I).Trim().Split(" ")[0]
           Write-Host "WSL2 IP: $wslIp"
-          Write-Host "Disabling Windows Firewall (required for Java to reach WSL2 network)..."
+          Write-Host "Disabling Windows Firewall..."
           Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
           Write-Host "Testing HTTP API from Windows side via curl..."
-          curl.exe -v http://${wslIp}:2375/v1.44/_ping
-          Write-Host ""
-          Write-Host "Testing HTTP API via localhost (WSL2 forwarding)..."
-          curl.exe -v http://localhost:2375/v1.44/_ping
+          curl.exe -s http://${wslIp}:2375/v1.44/_ping
           Write-Host ""
           echo "DOCKER_HOST=tcp://${wslIp}:2375" >> $env:GITHUB_ENV
           echo "TESTCONTAINERS_HOST_OVERRIDE=${wslIp}" >> $env:GITHUB_ENV
-          echo "WSL2_IP=${wslIp}" >> $env:GITHUB_ENV
-          Write-Host "Configuring testcontainers to skip socket check (known WSL2/Java issue)..."
-          $tcProps = "$env:USERPROFILE\.testcontainers.properties"
-          @"
-          checks.disable=true
-          docker.client.strategy=org.testcontainers.dockerclient.EnvironmentAndSystemPropertyClientProviderStrategy
-          "@ | Set-Content -Path $tcProps -Encoding ASCII
-          Get-Content $tcProps
           Write-Host "Linux container support is ready (DOCKER_HOST=tcp://${wslIp}:2375)"
 
       - uses: actions/checkout@v4
@@ -153,3 +142,4 @@ jobs:
         run: mvn verify -e --no-transfer-progress
         env:
           TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+          TESTCONTAINERS_DOCKER_CLIENT_STRATEGY: io.quarkus.test.Wsl2DockerClientProviderStrategy
