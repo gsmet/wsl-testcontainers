@@ -79,7 +79,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: 21
 
       - name: Verify Docker is still reachable
         shell: pwsh
@@ -105,17 +105,46 @@ jobs:
       - name: Test Java connectivity to Docker
         shell: pwsh
         run: |
-          Write-Host "Testing Java TCP to localhost:2375..."
-          java -e "try { var s = new java.net.Socket(); s.connect(new java.net.InetSocketAddress(\"localhost\", 2375), 5000); System.out.println(\"Java connected to localhost:2375\"); s.close(); } catch (Exception e) { System.out.println(\"Java FAILED to connect to localhost:2375: \" + e.getMessage()); }"
-          Write-Host "Testing Java TCP to WSL2 IP ${env:WSL2_IP}:2375..."
-          java -e "try { var s = new java.net.Socket(); s.connect(new java.net.InetSocketAddress(\"${env:WSL2_IP}\", 2375), 5000); System.out.println(\"Java connected to ${env:WSL2_IP}:2375\"); s.close(); } catch (Exception e) { System.out.println(\"Java FAILED to connect to ${env:WSL2_IP}:2375: \" + e.getMessage()); }"
+          Write-Host "Testing Java TCP connectivity with jshell..."
+          @"
+          try {
+            var s = new java.net.Socket();
+            s.connect(new java.net.InetSocketAddress("127.0.0.1", 2375), 5000);
+            System.out.println("Java IPv4 127.0.0.1:2375 = OK");
+            s.close();
+          } catch (Exception e) {
+            System.out.println("Java IPv4 127.0.0.1:2375 = FAILED: " + e.getMessage());
+          }
+          try {
+            var s = new java.net.Socket();
+            s.connect(new java.net.InetSocketAddress("localhost", 2375), 5000);
+            System.out.println("Java localhost:2375 = OK");
+            s.close();
+          } catch (Exception e) {
+            System.out.println("Java localhost:2375 = FAILED: " + e.getMessage());
+          }
+          try {
+            var s = new java.net.Socket();
+            s.connect(new java.net.InetSocketAddress("$($env:WSL2_IP)", 2375), 5000);
+            System.out.println("Java WSL2 IP $($env:WSL2_IP):2375 = OK");
+            s.close();
+          } catch (Exception e) {
+            System.out.println("Java WSL2 IP $($env:WSL2_IP):2375 = FAILED: " + e.getMessage());
+          }
+          System.out.println("IPv4 stack preferred: " + System.getProperty("java.net.preferIPv4Stack"));
+          var addrs = java.net.InetAddress.getAllByName("localhost");
+          for (var a : addrs) System.out.println("localhost resolves to: " + a);
+          /exit
+          "@ | jshell -
           Write-Host "Testing curl at the same time..."
           curl.exe -s http://localhost:2375/v1.44/_ping
           Write-Host ""
           curl.exe -s http://${env:WSL2_IP}:2375/v1.44/_ping
           Write-Host ""
 
-      - name: Run Testcontainers test
-        run: mvn verify -e --no-transfer-progress
+      - name: Run Testcontainers test (IPv4 forced)
+        run: mvn verify -e --no-transfer-progress -Djava.net.preferIPv4Stack=true
         env:
           TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+          DOCKER_HOST: tcp://127.0.0.1:2375
+          TESTCONTAINERS_HOST_OVERRIDE: 127.0.0.1
