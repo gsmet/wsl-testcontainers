@@ -23,12 +23,6 @@ jobs:
       - name: Set up Linux containers on Windows via WSL2
         shell: pwsh
         run: |
-          Write-Host "Configuring WSL2 mirrored networking..."
-          @"
-          [wsl2]
-          networkingMode=mirrored
-          "@ | Set-Content -Path "$env:USERPROFILE\.wslconfig" -Encoding ASCII
-          Get-Content "$env:USERPROFILE\.wslconfig"
           Write-Host "Installing WSL with Ubuntu..."
           wsl --install -d Ubuntu --no-launch
           Write-Host "WSL distro list:"
@@ -74,10 +68,17 @@ jobs:
           Write-Host "Testing HTTP API via localhost (WSL2 forwarding)..."
           curl.exe -v http://localhost:2375/v1.44/_ping
           Write-Host ""
-          echo "DOCKER_HOST=tcp://127.0.0.1:2375" >> $env:GITHUB_ENV
-          echo "TESTCONTAINERS_HOST_OVERRIDE=127.0.0.1" >> $env:GITHUB_ENV
+          echo "DOCKER_HOST=tcp://${wslIp}:2375" >> $env:GITHUB_ENV
+          echo "TESTCONTAINERS_HOST_OVERRIDE=${wslIp}" >> $env:GITHUB_ENV
           echo "WSL2_IP=${wslIp}" >> $env:GITHUB_ENV
-          Write-Host "Linux container support is ready (DOCKER_HOST=tcp://127.0.0.1:2375)"
+          Write-Host "Configuring testcontainers to skip socket check (known WSL2/Java issue)..."
+          $tcProps = "$env:USERPROFILE\.testcontainers.properties"
+          @"
+          checks.disable=true
+          docker.client.strategy=org.testcontainers.dockerclient.EnvironmentAndSystemPropertyClientProviderStrategy
+          "@ | Set-Content -Path $tcProps -Encoding ASCII
+          Get-Content $tcProps
+          Write-Host "Linux container support is ready (DOCKER_HOST=tcp://${wslIp}:2375)"
 
       - uses: actions/checkout@v4
 
