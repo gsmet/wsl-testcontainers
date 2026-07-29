@@ -68,9 +68,10 @@ jobs:
           Write-Host "Testing HTTP API via localhost (WSL2 forwarding)..."
           curl.exe -v http://localhost:2375/v1.44/_ping
           Write-Host ""
-          echo "DOCKER_HOST=tcp://${wslIp}:2375" >> $env:GITHUB_ENV
-          echo "TESTCONTAINERS_HOST_OVERRIDE=${wslIp}" >> $env:GITHUB_ENV
-          Write-Host "Linux container support is ready (DOCKER_HOST=tcp://${wslIp}:2375)"
+          echo "DOCKER_HOST=tcp://localhost:2375" >> $env:GITHUB_ENV
+          echo "TESTCONTAINERS_HOST_OVERRIDE=localhost" >> $env:GITHUB_ENV
+          echo "WSL2_IP=${wslIp}" >> $env:GITHUB_ENV
+          Write-Host "Linux container support is ready (DOCKER_HOST=tcp://localhost:2375)"
 
       - uses: actions/checkout@v4
 
@@ -99,6 +100,19 @@ jobs:
           Write-Host ""
           Write-Host "Testing Docker version API..."
           curl.exe -s http://${dockerHost}:2375/v1.44/version
+          Write-Host ""
+
+      - name: Test Java connectivity to Docker
+        shell: pwsh
+        run: |
+          Write-Host "Testing Java TCP to localhost:2375..."
+          java -e "try { var s = new java.net.Socket(); s.connect(new java.net.InetSocketAddress(\"localhost\", 2375), 5000); System.out.println(\"Java connected to localhost:2375\"); s.close(); } catch (Exception e) { System.out.println(\"Java FAILED to connect to localhost:2375: \" + e.getMessage()); }"
+          Write-Host "Testing Java TCP to WSL2 IP ${env:WSL2_IP}:2375..."
+          java -e "try { var s = new java.net.Socket(); s.connect(new java.net.InetSocketAddress(\"${env:WSL2_IP}\", 2375), 5000); System.out.println(\"Java connected to ${env:WSL2_IP}:2375\"); s.close(); } catch (Exception e) { System.out.println(\"Java FAILED to connect to ${env:WSL2_IP}:2375: \" + e.getMessage()); }"
+          Write-Host "Testing curl at the same time..."
+          curl.exe -s http://localhost:2375/v1.44/_ping
+          Write-Host ""
+          curl.exe -s http://${env:WSL2_IP}:2375/v1.44/_ping
           Write-Host ""
 
       - name: Run Testcontainers test
