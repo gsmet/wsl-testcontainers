@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: io.quarkus.test.WslContainerTest
 -------------------------------------------------------------------------------
-Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.299 s -- in io.quarkus.test.WslContainerTest
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.431 s -- in io.quarkus.test.WslContainerTest
