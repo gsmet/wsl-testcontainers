@@ -149,5 +149,17 @@ jobs:
           $env:TESTCONTAINERS_HOST_OVERRIDE = $env:WSL2_IP
           Write-Host "Running with DOCKER_HOST=$env:DOCKER_HOST"
           mvn verify -e --no-transfer-progress
+          Write-Host "Post-test Java connectivity check..."
+          @"
+          try {
+            var s = new java.net.Socket();
+            s.connect(new java.net.InetSocketAddress("$($env:WSL2_IP)", 2375), 5000);
+            System.out.println("Java WSL2 IP $($env:WSL2_IP):2375 = OK (post-test)");
+            s.close();
+          } catch (Exception e) {
+            System.out.println("Java WSL2 IP $($env:WSL2_IP):2375 = FAILED (post-test): " + e.getMessage());
+          }
+          /exit
+          "@ | jshell -
         env:
           TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock

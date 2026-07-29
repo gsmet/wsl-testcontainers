@@ -4,6 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.URI;
 import java.net.URL;
 
 import org.junit.jupiter.api.Test;
@@ -15,6 +18,21 @@ public class WslContainerTest {
 
     @Test
     void startContainerAndConnect() throws Exception {
+        String dockerHost = System.getenv("DOCKER_HOST");
+        System.out.println("DOCKER_HOST=" + dockerHost);
+        if (dockerHost != null && dockerHost.startsWith("tcp://")) {
+            URI uri = URI.create(dockerHost);
+            String host = uri.getHost();
+            int port = uri.getPort();
+            System.out.println("Testing raw socket to " + host + ":" + port + "...");
+            try (Socket s = new Socket()) {
+                s.connect(new InetSocketAddress(host, port), 5000);
+                System.out.println("Raw socket to " + host + ":" + port + " = OK");
+            } catch (Exception e) {
+                System.out.println("Raw socket to " + host + ":" + port + " = FAILED: " + e.getMessage());
+            }
+        }
+
         try (GenericContainer<?> nginx = new GenericContainer<>(DockerImageName.parse("nginx:alpine"))
                 .withExposedPorts(80)
                 .waitingFor(Wait.forHttp("/"))) {
