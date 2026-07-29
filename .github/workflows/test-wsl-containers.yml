@@ -60,28 +60,19 @@ jobs:
           Write-Host "Determining WSL2 IP address..."
           $wslIp = (wsl -d Ubuntu --user root -- hostname -I).Trim().Split(" ")[0]
           Write-Host "WSL2 IP: $wslIp"
+          Write-Host "Setting up port proxy from localhost:2375 to WSL2 ${wslIp}:2375..."
+          netsh interface portproxy add v4tov4 listenport=2375 listenaddress=0.0.0.0 connectport=2375 connectaddress=$wslIp
+          netsh advfirewall firewall add rule name="Docker WSL2 TCP" dir=in action=allow protocol=tcp localport=2375
+          Write-Host "Port proxy configuration:"
+          netsh interface portproxy show v4tov4
           Write-Host "Testing TCP connectivity from Windows side..."
-          $connected = $false
-          foreach ($candidate in @($wslIp, "localhost")) {
-            try {
-              $tcp = New-Object System.Net.Sockets.TcpClient
-              $tcp.Connect($candidate, 2375)
-              $tcp.Close()
-              Write-Host "  Successfully connected to Docker at ${candidate}:2375"
-              $dockerHost = $candidate
-              $connected = $true
-              break
-            } catch {
-              Write-Host "  Could not connect to ${candidate}:2375 - $_"
-            }
-          }
-          if (-not $connected) {
-            Write-Host "::error::Cannot connect to Docker daemon from Windows side"
-            exit 1
-          }
-          echo "DOCKER_HOST=tcp://${dockerHost}:2375" >> $env:GITHUB_ENV
-          echo "TESTCONTAINERS_HOST_OVERRIDE=${dockerHost}" >> $env:GITHUB_ENV
-          Write-Host "Linux container support is ready (DOCKER_HOST=tcp://${dockerHost}:2375)"
+          $tcp = New-Object System.Net.Sockets.TcpClient
+          $tcp.Connect("127.0.0.1", 2375)
+          $tcp.Close()
+          Write-Host "  Successfully connected to Docker at 127.0.0.1:2375 via port proxy"
+          echo "DOCKER_HOST=tcp://127.0.0.1:2375" >> $env:GITHUB_ENV
+          echo "TESTCONTAINERS_HOST_OVERRIDE=127.0.0.1" >> $env:GITHUB_ENV
+          Write-Host "Linux container support is ready (DOCKER_HOST=tcp://127.0.0.1:2375)"
 
       - uses: actions/checkout@v4
 
@@ -104,12 +95,13 @@ jobs:
           wsl -d Ubuntu --user root -- docker info
           Write-Host "Netstat for port 2375 inside WSL:"
           wsl -d Ubuntu --user root -- bash -c "ss -tlnp | grep 2375"
+          Write-Host "Port proxy status:"
+          netsh interface portproxy show v4tov4
           Write-Host "Testing TCP from Windows side..."
           $tcp = New-Object System.Net.Sockets.TcpClient
-          $dockerHost = ($env:DOCKER_HOST -replace 'tcp://', '' -replace ':2375', '')
-          $tcp.Connect($dockerHost, 2375)
+          $tcp.Connect("127.0.0.1", 2375)
           $tcp.Close()
-          Write-Host "TCP connection to $dockerHost:2375 succeeded"
+          Write-Host "TCP connection to 127.0.0.1:2375 succeeded"
 
       - name: Run Testcontainers test
         run: mvn verify -e --no-transfer-progress
