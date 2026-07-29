@@ -36,9 +36,9 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>ch.qos.logback</groupId>
-            <artifactId>logback-classic</artifactId>
-            <version>1.5.12</version>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>1.7.36</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -49,6 +49,14 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.5.2</version>
+                <configuration>
+                    <systemPropertyVariables>
+                        <org.slf4j.simpleLogger.defaultLogLevel>info</org.slf4j.simpleLogger.defaultLogLevel>
+                        <org.slf4j.simpleLogger.log.org.testcontainers>debug</org.slf4j.simpleLogger.log.org.testcontainers>
+                        <org.slf4j.simpleLogger.log.com.github.dockerjava>debug</org.slf4j.simpleLogger.log.com.github.dockerjava>
+                        <org.slf4j.simpleLogger.log.org.testcontainers.dockerclient>trace</org.slf4j.simpleLogger.log.org.testcontainers.dockerclient>
+                    </systemPropertyVariables>
+                </configuration>
             </plugin>
         </plugins>
     </build>
