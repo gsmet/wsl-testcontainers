@@ -12,12 +12,21 @@ jobs:
     name: WSL2 + Testcontainers on Windows
     runs-on: windows-2025
     steps:
+      - name: Stop Windows Docker service
+        shell: pwsh
+        run: |
+          Write-Host "Stopping Windows Docker to avoid conflicts with WSL2 Docker..."
+          Stop-Service docker -Force -ErrorAction SilentlyContinue
+          Stop-Service com.docker.service -Force -ErrorAction SilentlyContinue
+          Write-Host "Windows Docker services stopped."
+
       - name: Set up Linux containers on Windows via WSL2
         shell: pwsh
         run: |
-          Write-Host "Installing WSL with Ubuntu (no-launch to avoid interactive setup)..."
-          wsl --set-default-version 2
+          Write-Host "Installing WSL with Ubuntu..."
           wsl --install -d Ubuntu --no-launch
+          Write-Host "WSL distro list:"
+          wsl --list --verbose
           Write-Host "Enabling systemd (required for Docker)..."
           wsl -d Ubuntu --user root bash -c "printf '[boot]\nsystemd=true\n' > /etc/wsl.conf"
           wsl --shutdown
@@ -53,7 +62,7 @@ jobs:
           Write-Host "WSL2 IP: $wslIp"
           Write-Host "Testing TCP connectivity from Windows side..."
           $connected = $false
-          foreach ($candidate in @("localhost", $wslIp)) {
+          foreach ($candidate in @($wslIp, "localhost")) {
             try {
               $tcp = New-Object System.Net.Sockets.TcpClient
               $tcp.Connect($candidate, 2375)
@@ -103,6 +112,6 @@ jobs:
           Write-Host "TCP connection to $dockerHost:2375 succeeded"
 
       - name: Run Testcontainers test
-        run: mvn verify -e
+        run: mvn verify -e --no-transfer-progress
         env:
           TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
