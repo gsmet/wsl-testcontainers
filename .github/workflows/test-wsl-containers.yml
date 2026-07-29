@@ -60,9 +60,8 @@ jobs:
           Write-Host "Determining WSL2 IP address..."
           $wslIp = (wsl -d Ubuntu --user root -- hostname -I).Trim().Split(" ")[0]
           Write-Host "WSL2 IP: $wslIp"
-          Write-Host "Adding firewall rule for Docker TCP..."
-          netsh advfirewall firewall add rule name="Docker WSL2 TCP" dir=in action=allow protocol=tcp localport=2375
-          netsh advfirewall firewall add rule name="Docker WSL2 Out" dir=out action=allow protocol=tcp remoteport=2375
+          Write-Host "Disabling Windows Firewall (required for Java to reach WSL2 network)..."
+          Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
           Write-Host "Testing HTTP API from Windows side via curl..."
           curl.exe -v http://${wslIp}:2375/v1.44/_ping
           Write-Host ""
