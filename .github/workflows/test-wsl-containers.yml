@@ -67,6 +67,7 @@ jobs:
           Write-Host ""
           echo "DOCKER_HOST=tcp://${wslIp}:2375" >> $env:GITHUB_ENV
           echo "TESTCONTAINERS_HOST_OVERRIDE=${wslIp}" >> $env:GITHUB_ENV
+          echo "WSL2_IP=${wslIp}" >> $env:GITHUB_ENV
           Write-Host "Linux container support is ready (DOCKER_HOST=tcp://${wslIp}:2375)"
 
       - uses: actions/checkout@v4
@@ -96,46 +97,6 @@ jobs:
           Write-Host ""
           Write-Host "Testing Docker version API..."
           curl.exe -s http://${dockerHost}:2375/v1.44/version
-          Write-Host ""
-
-      - name: Test Java connectivity to Docker
-        shell: pwsh
-        run: |
-          Write-Host "Testing Java TCP connectivity with jshell..."
-          @"
-          try {
-            var s = new java.net.Socket();
-            s.connect(new java.net.InetSocketAddress("127.0.0.1", 2375), 5000);
-            System.out.println("Java IPv4 127.0.0.1:2375 = OK");
-            s.close();
-          } catch (Exception e) {
-            System.out.println("Java IPv4 127.0.0.1:2375 = FAILED: " + e.getMessage());
-          }
-          try {
-            var s = new java.net.Socket();
-            s.connect(new java.net.InetSocketAddress("localhost", 2375), 5000);
-            System.out.println("Java localhost:2375 = OK");
-            s.close();
-          } catch (Exception e) {
-            System.out.println("Java localhost:2375 = FAILED: " + e.getMessage());
-          }
-          try {
-            var s = new java.net.Socket();
-            s.connect(new java.net.InetSocketAddress("$($env:WSL2_IP)", 2375), 5000);
-            System.out.println("Java WSL2 IP $($env:WSL2_IP):2375 = OK");
-            s.close();
-          } catch (Exception e) {
-            System.out.println("Java WSL2 IP $($env:WSL2_IP):2375 = FAILED: " + e.getMessage());
-          }
-          System.out.println("IPv4 stack preferred: " + System.getProperty("java.net.preferIPv4Stack"));
-          var addrs = java.net.InetAddress.getAllByName("localhost");
-          for (var a : addrs) System.out.println("localhost resolves to: " + a);
-          /exit
-          "@ | jshell -
-          Write-Host "Testing curl at the same time..."
-          curl.exe -s http://localhost:2375/v1.44/_ping
-          Write-Host ""
-          curl.exe -s http://${env:WSL2_IP}:2375/v1.44/_ping
           Write-Host ""
 
       - name: Run Testcontainers test
