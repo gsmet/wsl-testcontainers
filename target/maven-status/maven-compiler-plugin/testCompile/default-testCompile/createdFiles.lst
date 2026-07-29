@@ -1,1 +1,2 @@
 io/quarkus/test/WslContainerTest.class
+io/quarkus/test/Wsl2DockerClientProviderStrategy.class
